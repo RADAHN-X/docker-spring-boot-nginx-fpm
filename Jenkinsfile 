@@ -1,0 +1,84 @@
+pipeline {
+    agent {
+        docker {
+            image 'maven:3.8.5-openjdk-17'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
+    
+    environment {
+        DOCKER_HOST = 'unix:///var/run/docker.sock'
+        SONAR_HOST_URL = 'http://sonarqube:9000'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', 
+                url: 'https://github.com/your-username/spring-petclinic.git'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh 'mvn clean compile -DskipTests'
+            }
+        }
+        
+        stage('Unit Tests') {
+            steps {
+                sh 'mvn test'
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh 'mvn sonar:sonar -Dsonar.projectKey=petclinic'
+                }
+            }
+        }
+        
+        stage('Integration Tests') {
+            steps {
+                sh 'mvn verify -DskipUnitTests'
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    docker.build("petclinic:${env.BUILD_ID}")
+                }
+            }
+        }
+        
+        stage('Deploy to Staging') {
+            steps {
+                script {
+                    sh 'docker-compose down || true'
+                    sh 'docker-compose up -d app'
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            emailext (
+                subject: "Build Result: ${currentBuild.currentResult} - ${env.JOB_NAME}",
+                body: "Build URL: ${env.BUILD_URL}",
+                to: "dev-team@company.com"
+            )
+        }
+        success {
+            slackSend channel: '#deployments', 
+                     message: "Petclinic Build ${env.BUILD_ID} deployed successfully!"
+        }
+    }
+}
