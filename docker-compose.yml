@@ -13,9 +13,14 @@ services:
       SPRING_DATASOURCE_USERNAME: petclinic
       SPRING_DATASOURCE_PASSWORD: petclinic
     ports:
-      - "8080:8080"
+      - "8081:8080"  # ✅ تغيير port لتجنب التعارض
     networks:
       - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # -------- MySQL --------
   mysql:
@@ -113,7 +118,7 @@ services:
     image: sonatype/nexus3:latest
     container_name: nexus
     ports:
-      - "8081:8081"
+      - "8083:8081"  # ✅ تغيير port لتجنب التعارض
     volumes:
       - nexus_data:/nexus-data
     networks:
@@ -146,12 +151,13 @@ services:
     networks:
       - frontend
     
+  # -------- Jenkins --------
   jenkins:
     image: jenkins/jenkins:lts
     container_name: jenkins
     user: root
     ports:
-      - "8082:8080"
+      - "8082:8080"  # ✅ التصحيح: Jenkins داخلياً على 8080
       - "50000:50000"
     volumes:
       - ./jenkins_home:/var/jenkins_home
@@ -159,6 +165,7 @@ services:
       - ./ops/jenkins/scripts:/var/jenkins_scripts
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
     networks:
       - frontend
       - backend
